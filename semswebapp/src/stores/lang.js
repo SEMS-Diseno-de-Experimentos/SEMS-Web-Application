@@ -12,7 +12,7 @@ const LANG_KEY = "sems-lang";
  */
 export const useLangStore = defineStore("lang", () => {
   const saved = localStorage.getItem(LANG_KEY);
-  const lang = ref(saved === "en" || saved === "es" ? saved : "es");
+  const lang = ref(saved === "en" || saved === "es" ? saved : "en");
 
   function setLang(l) {
     lang.value = l;
