@@ -2,14 +2,16 @@ node_modules/
 dist/
 dist-ssr/
 *.local
-.env
-.env.production
 
-# editor / os
+# Nunca subir: aunque las variables VITE_ sean publicas, este archivo suele
+# acabar teniendo tambien valores que no lo son.
+.env
+.env.*
+!.env.example
+
+# editor / sistema operativo
 .vscode/*
 !.vscode/extensions.json
 .idea/
 .DS_Store
 *.log
-
-*.tsbuildinfo

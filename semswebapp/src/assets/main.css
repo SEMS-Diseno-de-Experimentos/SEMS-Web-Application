@@ -1,0 +1,78 @@
+@import "tailwindcss";
+@import "tailwindcss-primeui";
+
+/* Modo oscuro por clase en <html>. PrimeVue lee este mismo selector: se
+   configura como darkModeSelector en main.js, asi que el interruptor de tema
+   cambia a la vez las utilidades de Tailwind y los componentes de PrimeVue. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ============================================================
+   SEMS Web App — Design System (azul + blanco, claro/oscuro)
+   Coherente con la landing page y con el preset Material de PrimeVue.
+   ============================================================ */
+
+@theme {
+  --color-navy-950: #0a1224;
+  --color-navy-900: #0e1730;
+  --color-navy-850: #131d3b;
+  --color-navy-800: #1b2748;
+  --color-navy-700: #25345f;
+  --color-navy-600: #2f4173;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: "Sora", "Inter", ui-sans-serif, system-ui, sans-serif;
+
+  --radius-card: 1rem;
+}
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    font-family: var(--font-sans);
+    @apply bg-slate-50 text-slate-700 dark:bg-navy-950 dark:text-slate-300;
+  }
+  ::selection {
+    background: #2563eb;
+    color: #fff;
+  }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 11px; height: 11px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #25345f;
+  background-clip: content-box;
+}
+
+/* Utilidades */
+.card {
+  @apply rounded-card border border-slate-200 bg-white shadow-sm dark:border-navy-800 dark:bg-navy-900 dark:shadow-none;
+}
+
+/* Campo de formulario. Se declara aqui, y no repetido en cada vista, porque lo
+   usan los formularios de todas las paginas. */
+.input-field {
+  @apply w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-900 outline-none transition-colors placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-navy-700 dark:bg-navy-950 dark:text-white;
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.animate-pulse-soft { animation: pulse-soft 2.4s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
