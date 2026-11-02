@@ -36,8 +36,8 @@ const { t } = useLangStore();
         <p class="mt-4 max-w-md text-blue-100/90">
           {{
             t(
-              "Monitorea el consumo de tu hogar en tiempo real, recibe alertas y ahorra hasta un 30% en tu recibo de luz.",
-              "Monitor your home's usage in real time, get alerts and save up to 30% on your electricity bill."
+              "Monitorea el consumo de tu establecimiento en tiempo real, recibe alertas y reduce tu factura de energía.",
+              "Monitor your establishment's usage in real time, get alerts and cut your energy bill."
             )
           }}
         </p>

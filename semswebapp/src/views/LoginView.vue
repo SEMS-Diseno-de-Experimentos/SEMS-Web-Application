@@ -47,7 +47,7 @@ async function onGoogle(idToken) {
 <template>
   <AuthShell
     :title="t('Bienvenido de nuevo', 'Welcome back')"
-    :subtitle="t('Ingresa para ver el consumo de tu hogar.', `Sign in to see your home's energy usage.`)"
+    :subtitle="t('Ingresa para ver el consumo de tu establecimiento.', `Sign in to see your establishment's energy usage.`)"
   >
     <form
       class="space-y-4"

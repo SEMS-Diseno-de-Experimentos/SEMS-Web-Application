@@ -40,14 +40,16 @@ const channelLabel = {
 };
 
 /** @returns {Promise<import("../types/alerts").Alert[]>} */
-export async function getAlerts(userId) {
+export async function getAlerts(userId, cargado = {}) {
   if (DEMO_MODE) {
     await delay();
     return demoAlerts;
   }
+  // Los equipos solo sirven para poner nombre donde el backend manda un
+  // identificador; si quien llama ya los tiene, se los pasa.
   const [{ data }, devices] = await Promise.all([
     api.get(`${BASE}/users/${userId}/alerts`),
-    listDevices(userId).catch(() => []),
+    cargado.devices ?? listDevices(userId).catch(() => []),
   ]);
   const nameById = new Map(devices.map((d) => [d.deviceId, d.deviceName]));
   return (data ?? []).map((a) => {
@@ -96,14 +98,14 @@ export async function updateAlertStatus(id, status) {
 }
 
 /** @returns {Promise<import("../types/alerts").Threshold[]>} */
-export async function getThresholds(userId) {
+export async function getThresholds(userId, cargado = {}) {
   if (DEMO_MODE) {
     await delay();
     return demoThresholds;
   }
   const [{ data }, devices] = await Promise.all([
     api.get(`${BASE}/users/${userId}/thresholds`),
-    listDevices(userId).catch(() => []),
+    cargado.devices ?? listDevices(userId).catch(() => []),
   ]);
   const nameById = new Map(devices.map((d) => [d.deviceId, d.deviceName]));
   return (data ?? []).map((t) => {

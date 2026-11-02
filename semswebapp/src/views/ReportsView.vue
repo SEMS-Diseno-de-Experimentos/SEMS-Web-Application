@@ -10,8 +10,15 @@ import UiLoading from "@/components/ui/UiLoading.vue";
 import UiErrorState from "@/components/ui/UiErrorState.vue";
 import UiSegmented from "@/components/ui/UiSegmented.vue";
 import UpgradeGate from "@/components/UpgradeGate.vue";
-import { getDashboardSummary } from "@/services/dashboard.service";
-import { getReadings, getDeviceConsumption } from "@/services/energy.service";
+import TariffCard from "@/components/TariffCard.vue";
+import { summarize, SUMMARY_DAYS } from "@/services/dashboard.service";
+import {
+  aggregateByDay,
+  getDeviceConsumption,
+  getReadingsRaw,
+} from "@/services/energy.service";
+import { listDevices } from "@/services/devices.service";
+import { getUnreadAlertCount } from "@/services/alerts.service";
 import { generateConsumptionReport } from "@/lib/report";
 import { soles, kwh as fmtKwh } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth";
@@ -29,26 +36,53 @@ const days = ref(30);
 const generating = ref(false);
 
 // La generacion de reportes es de plan Plus en adelante.
-const allowed = computed(() => hasTier(tier.value, "plus"));
+const allowed = computed(() => hasTier(tier.value, "pro"));
 const enabled = computed(() => Boolean(user.value) && allowed.value);
 
-const { data: summary, isLoading: loadingSummary, isError: errorSummary } = useQuery({
-  queryKey: computed(() => ["summary", user.value?.id]),
-  queryFn: () => getDashboardSummary(user.value.id),
+// Una sola carga de lecturas y de equipos para toda la pantalla: el resumen,
+// el desglose y los totales salen de los mismos datos.
+const { data: rawReadings, isLoading: loadingReadings, isError: errorReadings } = useQuery({
+  queryKey: computed(() => ["readings-raw", user.value?.id]),
+  queryFn: () => getReadingsRaw(user.value.id),
   enabled,
 });
+
+const { data: devices } = useQuery({
+  queryKey: computed(() => ["devices", user.value?.id]),
+  queryFn: () => listDevices(user.value.id),
+  enabled,
+});
+
+const { data: unreadAlerts } = useQuery({
+  queryKey: computed(() => ["alerts-unread", user.value?.id]),
+  queryFn: () => getUnreadAlertCount(user.value.id),
+  enabled,
+});
+
+const datosBase = computed(() =>
+  rawReadings.value !== undefined && devices.value !== undefined
+    ? { readings: rawReadings.value, devices: devices.value }
+    : null
+);
 
 const { data: consumption, isLoading: loadingConsumption, isError: errorConsumption } = useQuery({
   queryKey: computed(() => ["consumption", user.value?.id]),
-  queryFn: () => getDeviceConsumption(user.value.id),
-  enabled,
+  queryFn: () => getDeviceConsumption(user.value.id, datosBase.value),
+  enabled: computed(() => Boolean(user.value) && datosBase.value !== null),
 });
 
-const { data: readings, isLoading: loadingReadings, isError: errorReadings } = useQuery({
-  queryKey: computed(() => ["readings", user.value?.id, days.value]),
-  queryFn: () => getReadings(user.value.id, days.value),
-  enabled,
-});
+const readings = computed(() => aggregateByDay(rawReadings.value ?? [], days.value));
+
+const summary = computed(() =>
+  summarize({
+    consumption: consumption.value ?? [],
+    readings: aggregateByDay(rawReadings.value ?? [], SUMMARY_DAYS),
+    devices: devices.value ?? [],
+    unreadAlerts: unreadAlerts.value ?? 0,
+  })
+);
+const loadingSummary = loadingReadings;
+const errorSummary = errorReadings;
 
 const loading = computed(() => loadingSummary.value || loadingConsumption.value || loadingReadings.value);
 const error = computed(() => errorSummary.value || errorConsumption.value || errorReadings.value);
@@ -85,15 +119,15 @@ function download() {
       <p class="text-sm text-slate-500 dark:text-slate-400">
         {{
           allowed
-            ? t("Descarga el reporte de consumo de tu hogar en PDF.", `Download your home's consumption report as PDF.`)
-            : t("Descarga reportes de consumo y gasto de tu hogar.", "Download consumption and cost reports for your home.")
+            ? t("Descarga el reporte de consumo de tu establecimiento en PDF.", `Download your establishment's consumption report as PDF.`)
+            : t("Descarga reportes de consumo y gasto de tu establecimiento.", "Download consumption and cost reports for your establishment.")
         }}
       </p>
     </div>
 
     <UpgradeGate
       v-if="!allowed"
-      required="plus"
+      required="pro"
       :title="t('Reportes mensuales', 'Monthly reports')"
       :description="
         t(
@@ -172,5 +206,12 @@ function download() {
         </div>
       </template>
     </UiCard>
+
+    <!-- Tarifa del local y peso del cargo por potencia: va aqui porque es la
+         lectura que explica el recibo, junto al resto de los informes. -->
+    <TariffCard
+      v-if="user"
+      :user-id="user.id"
+    />
   </div>
 </template>

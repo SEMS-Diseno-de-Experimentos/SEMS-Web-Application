@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import { LoaderCircle } from "lucide-vue-next";
 import UiModal from "./ui/UiModal.vue";
 import UiField from "./ui/UiField.vue";
@@ -13,9 +13,14 @@ const props = defineProps({
   userId: { type: String, required: true },
   device: { type: Object, default: null },
   loading: { type: Boolean, default: false },
+  // El backend exige el local al registrar: el medidor, el contrato y la
+  // factura son del local, no de quien da de alta el equipo. La zona es
+  // opcional, porque al abrir un local puede que aun no esten definidas.
+  sites: { type: Array, default: () => [] },
+  zones: { type: Array, default: () => [] },
 });
 
-const emit = defineEmits(["close", "submit"]);
+const emit = defineEmits(["close", "submit", "site-change"]);
 
 const { t } = useLangStore();
 
@@ -39,13 +44,29 @@ const form = ref({
   model: props.device?.model ?? "",
   connectionProtocol: props.device?.connectionProtocol ?? "WIFI",
   externalDeviceCode: props.device?.externalDeviceCode ?? "",
+  siteId: props.device?.siteId ?? props.sites[0]?.siteId ?? "",
+  zoneId: props.device?.zoneId ?? "",
 });
+
+// Al cambiar de local hay que recargar sus zonas y olvidar la elegida, que
+// pertenecia al local anterior. La primera ejecucion no borra nada: al editar
+// un dispositivo su zona ya viene puesta y perderla seria un cambio silencioso.
+watch(() => form.value.siteId, (siteId, anterior) => {
+  if (anterior !== undefined) form.value.zoneId = "";
+  emit("site-change", siteId);
+}, { immediate: true });
 const location = ref(initExtras.location);
 const profileId = ref(initExtras.profileId);
 
 function onSubmit() {
   emit("submit", {
-    payload: props.device ? { ...form.value } : { ...form.value, userId: props.userId },
+    // zoneId vacio tiene que viajar como nulo: el backend acepta que falte,
+    // pero no una cadena vacia donde espera un identificador.
+    payload: {
+      ...form.value,
+      zoneId: form.value.zoneId || null,
+      ...(props.device ? {} : { userId: props.userId }),
+    },
     extras: { location: location.value, profileId: profileId.value },
   });
 }
@@ -72,6 +93,59 @@ function profileLabel(p) {
           class="input-field"
         >
       </UiField>
+
+      <div class="grid grid-cols-2 gap-3">
+        <UiField :label="t('Local', 'Site')">
+          <select
+            v-model="form.siteId"
+            required
+            class="input-field"
+          >
+            <option
+              v-if="sites.length === 0"
+              value=""
+            >
+              {{ t("Sin locales", "No sites") }}
+            </option>
+            <option
+              v-for="s in sites"
+              :key="s.siteId"
+              :value="s.siteId"
+            >
+              {{ s.name }}
+            </option>
+          </select>
+        </UiField>
+
+        <UiField :label="t('Zona (opcional)', 'Zone (optional)')">
+          <select
+            v-model="form.zoneId"
+            class="input-field"
+            :disabled="zones.length === 0"
+          >
+            <option value="">
+              {{ zones.length === 0 ? t("Sin zonas", "No zones") : t("Sin asignar", "Unassigned") }}
+            </option>
+            <option
+              v-for="z in zones"
+              :key="z.zoneId"
+              :value="z.zoneId"
+            >
+              {{ z.name }}
+            </option>
+          </select>
+        </UiField>
+      </div>
+
+      <p
+        v-if="sites.length === 0"
+        class="rounded-lg bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-300"
+      >
+        {{ t(
+          "Necesitas al menos un local antes de registrar dispositivos: el consumo y la factura se atribuyen al local. Regístralo en Mis locales.",
+          "You need at least one site before registering devices: usage and billing belong to the site. Register one under My sites."
+        ) }}
+      </p>
 
       <div class="grid grid-cols-2 gap-3">
         <UiField :label="t('Tipo', 'Type')">

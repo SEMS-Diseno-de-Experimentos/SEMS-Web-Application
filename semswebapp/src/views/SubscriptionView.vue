@@ -447,7 +447,7 @@ function isRemoving(id) {
                 {{ inv.description }}
               </p>
               <p class="text-xs text-slate-400">
-                {{ inv.date }} · {{ inv.id.slice(0, 8) }}
+                {{ inv.date }} · {{ inv.number || inv.id.slice(0, 8) }}
               </p>
             </div>
             <span class="text-sm font-semibold text-slate-900 dark:text-white">{{ soles(inv.amount) }}</span>
@@ -463,13 +463,30 @@ function isRemoving(id) {
             >
               {{ t("Pagar", "Pay") }}
             </button>
-            <button
-              type="button"
+            <!-- El comprobante se descarga del PDF que emite el modulo de
+                 pagos. Antes este boton no hacia nada: el numero y el PDF
+                 nunca llegaban a la pantalla, que es justo lo que hace falta
+                 para rendir el gasto. Un pago sin comprobante emitido se
+                 muestra sin enlace, porque el pago existe aunque la factura
+                 todavia no se haya emitido. -->
+            <a
+              v-if="inv.pdfUrl"
+              :href="inv.pdfUrl"
+              target="_blank"
+              rel="noopener"
               class="text-slate-400 transition-colors hover:text-blue-600"
-              :aria-label="t('Descargar', 'Download')"
+              :aria-label="t('Descargar comprobante', 'Download receipt')"
+              :title="t('Descargar comprobante', 'Download receipt')"
             >
               <Download class="h-4 w-4" />
-            </button>
+            </a>
+            <span
+              v-else
+              class="text-slate-200 dark:text-navy-700"
+              :title="t('Comprobante aún no emitido', 'Receipt not issued yet')"
+            >
+              <Download class="h-4 w-4" />
+            </span>
           </li>
         </ul>
       </UiCard>
