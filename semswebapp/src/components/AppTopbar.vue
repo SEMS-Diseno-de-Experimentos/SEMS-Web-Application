@@ -35,9 +35,9 @@ const initials = computed(() =>
 );
 
 const segmentLabel = computed(() =>
-  user.value?.segment === "HOMEOWNER"
-    ? t("Propietario de vivienda", "Homeowner")
-    : t("Estudiante / Inquilino", "Student / Tenant")
+  user.value?.segment === "RETAIL_CHAIN"
+    ? t("Cadena de retail", "Retail chain")
+    : t("Establecimiento independiente", "Independent establishment")
 );
 
 function goToSettings() {

@@ -11,8 +11,18 @@ import UiErrorState from "@/components/ui/UiErrorState.vue";
 import SeverityBadge from "@/components/ui/SeverityBadge.vue";
 import KpiCard from "@/components/KpiCard.vue";
 import ConsumptionChart from "@/components/charts/ConsumptionChart.vue";
-import { getDashboardSummary } from "@/services/dashboard.service";
-import { getReadings, getDeviceConsumption } from "@/services/energy.service";
+import UiEmptyState from "@/components/ui/UiEmptyState.vue";
+import GettingStartedCard from "@/components/GettingStartedCard.vue";
+import { summarize, SUMMARY_DAYS } from "@/services/dashboard.service";
+import {
+  aggregateByDay,
+  getDeviceConsumption,
+  getMeters,
+  getReadingsRaw,
+} from "@/services/energy.service";
+import { listDevices } from "@/services/devices.service";
+import { getUnreadAlertCount } from "@/services/alerts.service";
+import { getMyOrganization, listSites } from "@/services/organizations.service";
 import { getRecommendations, getAnomalies } from "@/services/analytics.service";
 import { soles, kwh as fmtKwh, pct } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth";
@@ -23,6 +33,10 @@ const { t } = useLangStore();
 
 const DEVICE_COLORS = ["#2563eb", "#0ea5e9", "#6366f1", "#f59e0b", "#10b981", "#94a3b8"];
 
+// Dias que se pintan en el grafico. Las lecturas se piden una sola vez para la
+// ventana larga del resumen y aqui solo se recortan.
+const CHART_DAYS = 14;
+
 // Todas las consultas siguen el mismo patron: clave reactiva con el id del
 // usuario y `enabled` para no lanzarlas antes de que haya sesion.
 //
@@ -32,22 +46,81 @@ const DEVICE_COLORS = ["#2563eb", "#0ea5e9", "#6366f1", "#f59e0b", "#10b981", "#
 // evalua es el ref y no su valor.
 const enabled = computed(() => Boolean(user.value));
 
-const { data: summary, isLoading: loadingSummary, isError: errorSummary } = useQuery({
-  queryKey: computed(() => ["summary", user.value?.id]),
-  queryFn: () => getDashboardSummary(user.value.id),
+// Las lecturas crudas se piden UNA vez y de ahi sale todo lo que depende de
+// ellas: el grafico diario, el resumen y, si hace falta, el desglose por
+// equipo. Antes cada uno las pedia por su cuenta y el mismo GET salia cuatro
+// veces por carga del panel.
+const { data: rawReadings, isLoading: loadingReadings, isError: errorReadings } = useQuery({
+  queryKey: computed(() => ["readings-raw", user.value?.id]),
+  queryFn: () => getReadingsRaw(user.value.id),
   enabled,
 });
 
-const { data: readings, isLoading: loadingReadings, isError: errorReadings } = useQuery({
-  queryKey: computed(() => ["readings", user.value?.id, 14]),
-  queryFn: () => getReadings(user.value.id, 14),
+const { data: devices, isLoading: loadingDevices, isError: errorDevices } = useQuery({
+  queryKey: computed(() => ["devices", user.value?.id]),
+  queryFn: () => listDevices(user.value.id),
   enabled,
 });
+
+const { data: unreadAlerts } = useQuery({
+  queryKey: computed(() => ["alerts-unread", user.value?.id]),
+  queryFn: () => getUnreadAlertCount(user.value.id),
+  enabled,
+});
+
+// El desglose por equipo espera a los tres anteriores y se los pasa, asi que
+// solo consulta su propio endpoint.
+const datosBase = computed(() =>
+  rawReadings.value !== undefined && devices.value !== undefined
+    ? { readings: rawReadings.value, devices: devices.value }
+    : null
+);
 
 const { data: consumption, isLoading: loadingConsumption, isError: errorConsumption } = useQuery({
   queryKey: computed(() => ["consumption", user.value?.id]),
-  queryFn: () => getDeviceConsumption(user.value.id),
-  enabled,
+  queryFn: () => getDeviceConsumption(user.value.id, datosBase.value),
+  enabled: computed(() => Boolean(user.value) && datosBase.value !== null),
+});
+
+// Lecturas por dia: la ventana larga para el resumen, recortada para el grafico.
+const readings = computed(() => aggregateByDay(rawReadings.value ?? [], SUMMARY_DAYS));
+const chartReadings = computed(() => readings.value.slice(-CHART_DAYS));
+
+const summary = computed(() =>
+  summarize({
+    consumption: consumption.value ?? [],
+    readings: readings.value,
+    devices: devices.value ?? [],
+    unreadAlerts: unreadAlerts.value ?? 0,
+  })
+);
+
+const loadingSummary = computed(() => loadingReadings.value || loadingDevices.value);
+const errorSummary = computed(() => errorReadings.value && errorDevices.value);
+
+// Una cuenta sin lecturas ni equipos acaba de empezar: solo en ese caso vale la
+// pena averiguar que le falta, para no cargar al resto con tres consultas mas.
+const cuentaNueva = computed(
+  () => rawReadings.value?.length === 0 && devices.value?.length === 0
+);
+const revisarAlta = computed(() => Boolean(user.value) && cuentaNueva.value);
+
+const { data: organization } = useQuery({
+  queryKey: computed(() => ["my-organization", user.value?.id]),
+  queryFn: () => getMyOrganization(user.value.id),
+  enabled: revisarAlta,
+});
+
+const { data: sites } = useQuery({
+  queryKey: computed(() => ["sites", organization.value?.organizationId]),
+  queryFn: () => listSites(organization.value.organizationId),
+  enabled: computed(() => revisarAlta.value && Boolean(organization.value?.organizationId)),
+});
+
+const { data: meters } = useQuery({
+  queryKey: computed(() => ["meters", user.value?.id]),
+  queryFn: () => getMeters(user.value.id),
+  enabled: revisarAlta,
 });
 
 const { data: recs, isLoading: loadingRecs, isError: errorRecs } = useQuery({
@@ -58,12 +131,27 @@ const { data: recs, isLoading: loadingRecs, isError: errorRecs } = useQuery({
 
 const { data: anomalies, isLoading: loadingAnomalies, isError: errorAnomalies } = useQuery({
   queryKey: computed(() => ["anomalies", user.value?.id]),
-  queryFn: () => getAnomalies(user.value.id),
-  enabled,
+  queryFn: () => getAnomalies(user.value.id, { devices: devices.value ?? [] }),
+  enabled: computed(() => Boolean(user.value) && devices.value !== undefined),
 });
 
 const firstName = computed(() => user.value?.fullName?.split(" ")[0] ?? "👋");
 const topRecs = computed(() => (recs.value ?? []).slice(0, 3));
+
+// Textos de las dos tarjetas que antes afirmaban cosas sin tener los datos.
+const ahorro = computed(() =>
+  summary.value.savingAmount === null ? "—" : soles(summary.value.savingAmount)
+);
+const ahorroPie = computed(() =>
+  summary.value.savingPct === null
+    ? t("Aún sin histórico para comparar", "No history to compare yet")
+    : `${pct(summary.value.savingPct)} ${t("vs. la quincena anterior", "vs. the previous fortnight")}`
+);
+const proyeccionPie = computed(() =>
+  summary.value.projectedCost === null
+    ? t("Sin lecturas todavía", "No readings yet")
+    : `${t("Proyección", "Forecast")}: ${soles(summary.value.projectedCost)}`
+);
 
 function colorAt(i) {
   return DEVICE_COLORS[i % DEVICE_COLORS.length];
@@ -77,13 +165,21 @@ function colorAt(i) {
         {{ t("Hola", "Hi") }}, {{ firstName }}
       </h2>
       <p class="text-sm text-slate-500 dark:text-slate-400">
-        {{ t("Este es el resumen energético de tu hogar.", `This is your home's energy overview.`) }}
+        {{ t("Este es el resumen energético de tu establecimiento.", `This is your establishment's energy overview.`) }}
       </p>
     </div>
 
+    <GettingStartedCard
+      v-if="cuentaNueva"
+      :has-organization="Boolean(organization)"
+      :site-count="sites?.length ?? 0"
+      :meter-count="meters?.length ?? 0"
+      :device-count="devices?.length ?? 0"
+    />
+
     <!-- Indicadores -->
     <UiLoading v-if="loadingSummary" />
-    <UiErrorState v-else-if="errorSummary || !summary" />
+    <UiErrorState v-else-if="errorSummary" />
     <div
       v-else
       class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
@@ -91,16 +187,16 @@ function colorAt(i) {
       <KpiCard
         :icon="TrendingDown"
         tone="green"
-        :label="t('Ahorro este mes', 'Savings this month')"
-        :value="soles(summary.savingAmount)"
-        :hint="`${pct(summary.savingPct)} ${t('vs. tu promedio', 'vs. your average')}`"
+        :label="t('Ahorro de la quincena', 'Savings this fortnight')"
+        :value="ahorro"
+        :hint="ahorroPie"
       />
       <KpiCard
         :icon="Receipt"
         tone="blue"
         :label="t('Gasto actual', 'Current spend')"
         :value="soles(summary.currentMonthCost)"
-        :hint="`${t('Proyección', 'Forecast')}: ${soles(summary.projectedCost)}`"
+        :hint="proyeccionPie"
       />
       <KpiCard
         :icon="Zap"
@@ -130,10 +226,18 @@ function colorAt(i) {
           </template>
         </UiCardTitle>
         <UiLoading v-if="loadingReadings" />
-        <UiErrorState v-else-if="errorReadings || !readings" />
+        <UiErrorState v-else-if="errorReadings" />
+        <UiEmptyState
+          v-else-if="chartReadings.length === 0"
+          :message="t('Todavía no hay lecturas.', 'No readings yet.')"
+          :hint="t(
+            'Vincula un medidor en Monitoreo y el consumo diario aparecerá aquí.',
+            'Link a meter under Monitoring and daily usage will show up here.',
+          )"
+        />
         <ConsumptionChart
           v-else
-          :data="readings"
+          :data="chartReadings"
           metric="kwh"
         />
       </UiCard>
@@ -142,7 +246,15 @@ function colorAt(i) {
       <UiCard>
         <UiCardTitle>{{ t("Por dispositivo", "By device") }}</UiCardTitle>
         <UiLoading v-if="loadingConsumption" />
-        <UiErrorState v-else-if="errorConsumption || !consumption" />
+        <UiErrorState v-else-if="errorConsumption" />
+        <UiEmptyState
+          v-else-if="(consumption?.length ?? 0) === 0"
+          :message="t('Sin consumo por equipo.', 'No per-device usage.')"
+          :hint="t(
+            'Registra tus equipos para ver cuánto gasta cada uno.',
+            'Register your equipment to see how much each one spends.',
+          )"
+        />
         <ul
           v-else
           class="space-y-3.5"
@@ -184,7 +296,15 @@ function colorAt(i) {
           </template>
         </UiCardTitle>
         <UiLoading v-if="loadingRecs" />
-        <UiErrorState v-else-if="errorRecs || !recs" />
+        <UiErrorState v-else-if="errorRecs" />
+        <UiEmptyState
+          v-else-if="topRecs.length === 0"
+          :message="t('Aún no hay recomendaciones.', 'No recommendations yet.')"
+          :hint="t(
+            'Salen del consumo medido: con unos días de lecturas empiezan a aparecer.',
+            'They come from measured usage: a few days of readings and they start showing up.',
+          )"
+        />
         <ul
           v-else
           class="space-y-3"
@@ -230,7 +350,12 @@ function colorAt(i) {
           </template>
         </UiCardTitle>
         <UiLoading v-if="loadingAnomalies" />
-        <UiErrorState v-else-if="errorAnomalies || !anomalies" />
+        <UiErrorState v-else-if="errorAnomalies" />
+        <UiEmptyState
+          v-else-if="(anomalies?.length ?? 0) === 0"
+          :message="t('Ninguna anomalía detectada.', 'No anomalies detected.')"
+          :hint="t('Es la respuesta buena.', 'That is the good answer.')"
+        />
         <ul
           v-else
           class="space-y-3"

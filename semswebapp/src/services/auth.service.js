@@ -1,8 +1,10 @@
 import { api, DEMO_MODE, delay, tokenStore } from "@/lib/api";
 import { demoUser } from "@/lib/demo";
 
-// Rol por defecto al registrarse desde la web (usuario normal del hogar).
-const DEFAULT_ROLE = "RESIDENT";
+// Rol por defecto al registrarse desde la web: personal del establecimiento.
+// Tiene que ser uno de los que el backend siembra (ADMIN o STAFF); el antiguo
+// RESIDENT desaparecio al cambiar el segmento y hacia fallar el alta.
+const DEFAULT_ROLE = "STAFF";
 
 /**
  * Forma real de la respuesta del modulo de identidad en /auth/login y
@@ -12,11 +14,11 @@ const DEFAULT_ROLE = "RESIDENT";
 /** @returns {import("../types").UserSegment | undefined} */
 function normSegment(s) {
   const u = String(s ?? "").toUpperCase();
-  return u === "HOMEOWNER" || u === "TENANT" ? u : undefined;
+  return u === "RETAIL_CHAIN" || u === "INDEPENDENT" ? u : undefined;
 }
 
-// El modulo de identidad no guarda nombre, asi que armamos uno para mostrar a
-// partir del correo.
+// Si la cuenta no tiene nombre (altas anteriores a guardarlo), se muestra la
+// parte local del correo para no dejar el saludo vacio.
 function displayNameFromEmail(email) {
   const local = (email || "").split("@")[0] || "Usuario";
   return local.charAt(0).toUpperCase() + local.slice(1);
@@ -27,8 +29,10 @@ function mapUser(res) {
   return {
     id: res.userId,
     email: res.emailAddress,
-    fullName: displayNameFromEmail(res.emailAddress),
-    role: res.roles?.[0] ?? "RESIDENT",
+    // El nombre lo guarda el backend: antes se inventaba a partir del correo y
+    // el que el usuario escribia en el alta solo vivia en este navegador.
+    fullName: res.fullName || displayNameFromEmail(res.emailAddress),
+    role: res.roles?.[0] ?? DEFAULT_ROLE,
     segment: normSegment(res.segment),
   };
 }
@@ -48,7 +52,7 @@ function decodeToken(token) {
       id: payload.userId ?? payload.sub ?? "",
       email: payload.email ?? payload.emailAddress ?? "",
       fullName: displayNameFromEmail(payload.email ?? payload.emailAddress ?? ""),
-      role: payload.roles?.[0] ?? "RESIDENT",
+      role: payload.roles?.[0] ?? DEFAULT_ROLE,
     };
   } catch {
     return null;
@@ -89,18 +93,17 @@ export async function register(fullName, email, password, segment) {
     await delay();
     return { token: "demo-token", user: { ...demoUser, fullName, email, segment } };
   }
-  // El backend registra con emailAddress + password + role + segment.
-  await api.post("/api/v1/auth/register", {
+  // El alta ya devuelve token y perfil, asi que no hace falta encadenar un
+  // login detras: era una segunda vuelta al servidor para pedir lo que la
+  // primera acababa de responder.
+  const { data } = await api.post("/api/v1/auth/register", {
     emailAddress: email,
     password,
     role: DEFAULT_ROLE,
+    fullName,
     segment,
   });
-  // Tras registrar, iniciamos sesion para obtener el token.
-  const res = await login(email, password);
-  // El nombre lo escribio el usuario (el backend no lo guarda); el segmento lo
-  // trae el login.
-  return fullName ? { ...res, user: { ...res.user, fullName } } : res;
+  return { token: data.token, user: mapUser(data) };
 }
 
 /** @returns {Promise<import("../types").User>} */
@@ -109,11 +112,34 @@ export async function getMe() {
     await delay(200);
     return demoUser;
   }
-  // Reconstruimos el usuario desde el JWT guardado (evita depender de /users/me).
   const token = tokenStore.get();
-  const user = token ? decodeToken(token) : null;
-  if (!user) throw new Error("No hay sesión válida");
-  return user;
+  if (!token) throw new Error("No hay sesión válida");
+  try {
+    // El perfil se pide al backend: el token lleva el correo y los roles, pero
+    // no el nombre ni el segmento, y son justo los que cambian.
+    const { data } = await api.get("/api/v1/users/me");
+    return mapUser(data);
+  } catch {
+    // Si la peticion falla (sin red, backend caido) se tira del token para no
+    // echar al usuario de una sesion que sigue siendo valida.
+    const user = decodeToken(token);
+    if (!user) throw new Error("No hay sesión válida");
+    return user;
+  }
+}
+
+/**
+ * Guarda el nombre y el segmento del propio usuario.
+ *
+ * @returns {Promise<import("../types").User>}
+ */
+export async function updateProfile({ fullName, segment }) {
+  if (DEMO_MODE) {
+    await delay(300);
+    return { ...demoUser, fullName, segment };
+  }
+  const { data } = await api.put("/api/v1/users/me", { fullName, segment });
+  return mapUser(data);
 }
 
 // --- Recuperacion de cuenta y verificacion (RF-NOT-03 / RF-AUTH-01) ---
@@ -135,8 +161,10 @@ export async function resetPassword(token, newPassword) {
   await api.post("/api/v1/auth/reset-password", { token, newPassword });
 }
 
-// Verifica (activa) la cuenta con el token del correo.
+// Verifica (activa) la cuenta con el token del correo. El backend espera el
+// token en el cuerpo de un POST; con GET responde 405 y la cuenta nunca se
+// activa. Devuelve una sesion, que aqui no se usa: el usuario entra a mano.
 export async function verifyAccount(token) {
   if (DEMO_MODE) { await delay(400); return; }
-  await api.get("/api/v1/auth/verify", { params: { token } });
+  await api.post("/api/v1/auth/verify", { token });
 }

@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from "vue";
+import { ref, watch } from "vue";
 import { LoaderCircle } from "lucide-vue-next";
 import UiModal from "./ui/UiModal.vue";
 import UiField from "./ui/UiField.vue";
@@ -13,16 +13,42 @@ const props = defineProps({
   userId: { type: String, required: true },
   device: { type: Object, default: null },
   loading: { type: Boolean, default: false },
+  // El backend exige el local al registrar: el medidor, el contrato y la
+  // factura son del local, no de quien da de alta el equipo. La zona es
+  // opcional, porque al abrir un local puede que aun no esten definidas.
+  sites: { type: Array, default: () => [] },
+  zones: { type: Array, default: () => [] },
 });
 
-const emit = defineEmits(["close", "submit"]);
+const emit = defineEmits(["close", "submit", "site-change"]);
 
 const { t } = useLangStore();
 
+// Equipos del segmento comercial, en el orden en que se ofrecen. El primero
+// es el valor por defecto del formulario.
+//
+// Los medidores no estan en esta lista a proposito: aqui se registran los
+// equipos que consumen (frio, climatizacion, hornos), no el instrumento que
+// mide. Los medidores se vinculan en Monitoreo y en el detalle del local.
 const DEVICE_TYPES = [
-  "meter", "AIR_CONDITIONER", "REFRIGERATOR", "WATER_HEATER", "TV",
-  "WASHING_MACHINE", "MICROWAVE", "THERMOSTAT", "SENSOR", "smart_plug", "Mobile",
+  "COLD_ROOM", "FREEZER", "DISPLAY_FRIDGE", "COMPRESSOR", "HVAC",
+  "VENTILATION", "LIGHTING", "OVEN", "POS", "OTHER",
 ];
+
+// El <select> envia al backend la clave, pero muestra la etiqueta: una clave
+// como "DISPLAY_FRIDGE" no le dice nada a quien esta dando de alta el equipo.
+const DEVICE_TYPE_LABELS = {
+  COLD_ROOM: ["Cámara de frío", "Cold room"],
+  FREEZER: ["Congeladora", "Freezer"],
+  DISPLAY_FRIDGE: ["Exhibidor refrigerado", "Display fridge"],
+  COMPRESSOR: ["Compresor", "Compressor"],
+  HVAC: ["Climatización", "HVAC"],
+  VENTILATION: ["Extracción y ventilación", "Extraction and ventilation"],
+  LIGHTING: ["Iluminación", "Lighting"],
+  OVEN: ["Horno", "Oven"],
+  POS: ["Caja / POS", "Checkout / POS"],
+  OTHER: ["Otro", "Other"],
+};
 const PROTOCOLS = ["WIFI", "BLUETOOTH"];
 
 const isEdit = Boolean(props.device);
@@ -34,20 +60,45 @@ const initExtras = props.device
 
 const form = ref({
   deviceName: props.device?.deviceName ?? "",
-  deviceType: props.device?.deviceType ?? "meter",
+  deviceType: props.device?.deviceType ?? DEVICE_TYPES[0],
   brand: props.device?.brand ?? "",
   model: props.device?.model ?? "",
   connectionProtocol: props.device?.connectionProtocol ?? "WIFI",
   externalDeviceCode: props.device?.externalDeviceCode ?? "",
+  siteId: props.device?.siteId ?? props.sites[0]?.siteId ?? "",
+  zoneId: props.device?.zoneId ?? "",
 });
+
+// Al cambiar de local hay que recargar sus zonas y olvidar la elegida, que
+// pertenecia al local anterior. La primera ejecucion no borra nada: al editar
+// un dispositivo su zona ya viene puesta y perderla seria un cambio silencioso.
+watch(() => form.value.siteId, (siteId, anterior) => {
+  if (anterior !== undefined) form.value.zoneId = "";
+  emit("site-change", siteId);
+}, { immediate: true });
 const location = ref(initExtras.location);
 const profileId = ref(initExtras.profileId);
 
 function onSubmit() {
   emit("submit", {
-    payload: props.device ? { ...form.value } : { ...form.value, userId: props.userId },
+    // zoneId vacio tiene que viajar como nulo: el backend acepta que falte,
+    // pero no una cadena vacia donde espera un identificador.
+    payload: {
+      ...form.value,
+      zoneId: form.value.zoneId || null,
+      ...(props.device ? {} : { userId: props.userId }),
+    },
     extras: { location: location.value, profileId: profileId.value },
   });
+}
+
+// La etiqueta se resuelve al pintar y no al definir el mapa: `t` lee el idioma
+// de forma reactiva, y un objeto traducido una sola vez se quedaria con el
+// idioma que hubiera al abrir el formulario. Un tipo que no este en el mapa
+// (un equipo antiguo) cae a su clave en vez de quedarse en blanco.
+function deviceTypeLabel(opt) {
+  const etiqueta = DEVICE_TYPE_LABELS[opt];
+  return etiqueta ? t(etiqueta[0], etiqueta[1]) : opt;
 }
 
 function profileLabel(p) {
@@ -68,10 +119,63 @@ function profileLabel(p) {
         <input
           v-model="form.deviceName"
           required
-          :placeholder="t('Ej: Medidor cocina', 'e.g. Kitchen meter')"
+          :placeholder="t('Ej: Cámara de frío 1', 'e.g. Cold room 1')"
           class="input-field"
         >
       </UiField>
+
+      <div class="grid grid-cols-2 gap-3">
+        <UiField :label="t('Local', 'Site')">
+          <select
+            v-model="form.siteId"
+            required
+            class="input-field"
+          >
+            <option
+              v-if="sites.length === 0"
+              value=""
+            >
+              {{ t("Sin locales", "No sites") }}
+            </option>
+            <option
+              v-for="s in sites"
+              :key="s.siteId"
+              :value="s.siteId"
+            >
+              {{ s.name }}
+            </option>
+          </select>
+        </UiField>
+
+        <UiField :label="t('Zona (opcional)', 'Zone (optional)')">
+          <select
+            v-model="form.zoneId"
+            class="input-field"
+            :disabled="zones.length === 0"
+          >
+            <option value="">
+              {{ zones.length === 0 ? t("Sin zonas", "No zones") : t("Sin asignar", "Unassigned") }}
+            </option>
+            <option
+              v-for="z in zones"
+              :key="z.zoneId"
+              :value="z.zoneId"
+            >
+              {{ z.name }}
+            </option>
+          </select>
+        </UiField>
+      </div>
+
+      <p
+        v-if="sites.length === 0"
+        class="rounded-lg bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-300"
+      >
+        {{ t(
+          "Necesitas al menos un local antes de registrar dispositivos: el consumo y la factura se atribuyen al local. Regístralo en Mis locales.",
+          "You need at least one site before registering devices: usage and billing belong to the site. Register one under My sites."
+        ) }}
+      </p>
 
       <div class="grid grid-cols-2 gap-3">
         <UiField :label="t('Tipo', 'Type')">
@@ -84,7 +188,7 @@ function profileLabel(p) {
               :key="opt"
               :value="opt"
             >
-              {{ opt }}
+              {{ deviceTypeLabel(opt) }}
             </option>
           </select>
         </UiField>
@@ -109,7 +213,7 @@ function profileLabel(p) {
           <input
             v-model="form.brand"
             required
-            placeholder="Ej: Itron"
+            placeholder="Ej: Bohn"
             class="input-field"
           >
         </UiField>
@@ -117,7 +221,7 @@ function profileLabel(p) {
           <input
             v-model="form.model"
             required
-            placeholder="Ej: EM100"
+            placeholder="Ej: MGM-040"
             class="input-field"
           >
         </UiField>
@@ -127,7 +231,7 @@ function profileLabel(p) {
         <input
           v-model="form.externalDeviceCode"
           required
-          placeholder="Ej: MED-001"
+          placeholder="Ej: COLD-001"
           class="input-field"
         >
       </UiField>

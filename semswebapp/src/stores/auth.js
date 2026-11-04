@@ -81,12 +81,26 @@ export const useAuthStore = defineStore("auth", () => {
     }
   }
 
-  /** Actualiza datos del perfil en memoria y en localStorage (nombre, segmento). */
-  function updateProfile(patch) {
+  /**
+   * Guarda el perfil (nombre y segmento) en el backend y refresca la copia
+   * local con lo que responde.
+   *
+   * Antes solo escribia en localStorage, de modo que el cambio se perdia al
+   * entrar desde otro equipo o al limpiar el navegador.
+   */
+  async function updateProfile(patch) {
     if (!user.value) return;
-    const next = { ...user.value, ...patch };
-    localStorage.setItem(USER_KEY, JSON.stringify(next));
-    user.value = next;
+    loading.value = true;
+    try {
+      const actualizado = await authService.updateProfile({
+        fullName: patch.fullName ?? user.value.fullName,
+        segment: patch.segment ?? user.value.segment,
+      });
+      localStorage.setItem(USER_KEY, JSON.stringify(actualizado));
+      user.value = actualizado;
+    } finally {
+      loading.value = false;
+    }
   }
 
   function logout() {

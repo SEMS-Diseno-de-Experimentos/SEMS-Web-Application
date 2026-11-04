@@ -14,15 +14,16 @@
  */
 export const CONSUMPTION_PROFILES = [
   { id: "none", name: "Sin perfil", watts: 0 },
-  { id: "fridge_a", name: "Refrigeradora clase A", watts: 150 },
-  { id: "fridge_std", name: "Refrigeradora estándar", watts: 350 },
-  { id: "ac", name: "Aire acondicionado", watts: 1200 },
-  { id: "water_heater", name: "Terma eléctrica", watts: 1500 },
-  { id: "washer", name: "Lavadora", watts: 500 },
-  { id: "microwave", name: "Microondas", watts: 1000 },
-  { id: "tv", name: "Televisor LED", watts: 100 },
-  { id: "computer", name: "Laptop / PC", watts: 120 },
-  { id: "lighting", name: "Iluminación", watts: 60 },
+  { id: "cold_room", name: "Cámara de frío", watts: 3000 },
+  { id: "display_fridge", name: "Exhibidor refrigerado", watts: 800 },
+  { id: "island_freezer", name: "Congelador de isla", watts: 600 },
+  { id: "hvac_package", name: "Climatización central", watts: 7000 },
+  { id: "hvac_split", name: "Split 24.000 BTU", watts: 2200 },
+  { id: "oven", name: "Horno eléctrico", watts: 4000 },
+  { id: "compressor", name: "Compresor", watts: 2500 },
+  { id: "extractor", name: "Extractor / ventilación", watts: 750 },
+  { id: "lighting_floor", name: "Iluminación de sala (circuito)", watts: 1500 },
+  { id: "pos", name: "Caja / POS", watts: 150 },
 ];
 
 /** @returns {ConsumptionProfile} */

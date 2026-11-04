@@ -5,6 +5,7 @@ import {
   demoPaymentMethods,
   demoInvoices,
 } from "@/lib/demoExtra";
+import { tierFromName } from "@/lib/plan";
 
 // Suscripciones y pagos. Ambos modulos exponen sus rutas bajo /api/v1.
 const BASE = "/api/v1";
@@ -43,7 +44,11 @@ function mapPlan(p) {
     price: p.Price ?? 0,
     period: periodLabel(p.BillingPeriod),
     features: planFeatures(p),
-    recommended: (p.Name ?? "").toLowerCase().includes("pro"),
+    // El plan intermedio es el que se destaca. Antes el nivel se deducia
+    // buscando "plus" en el nombre, que con el catalogo actual (Básico, Pro,
+    // Enterprise) no es ninguno: la pagina de planes se quedaba sin
+    // recomendacion.
+    recommended: tierFromName(p.Name) === "pro",
   };
 }
 
@@ -64,14 +69,35 @@ function normSubStatus(s) {
   }
 }
 
+// El catalogo de planes es el mismo para todos y cambia muy de vez en cuando,
+// pero lo necesitan la pagina de suscripcion, el menu lateral y cada pantalla
+// que comprueba el nivel del plan. Se recuerda un minuto para que una carga de
+// pantalla no lo pida tres veces; no es cache de datos del usuario, asi que no
+// hay nada que pueda quedarse obsoleto para nadie.
+const VIGENCIA_PLANES = 60_000;
+let peticionDePlanes = null;
+let planesPedidosEn = 0;
+
 /** @returns {Promise<import("../types/billing").SubscriptionPlan[]>} */
 export async function getPlans() {
   if (DEMO_MODE) {
     await delay();
     return demoPlans;
   }
-  const { data } = await api.get(`${BASE}/subscription-plans`);
-  return (data ?? []).map(mapPlan);
+  // Se recuerda la PROMESA y no el resultado: la pantalla de suscripcion y la
+  // consulta del plan contratado arrancan a la vez, y recordando solo el
+  // resultado las dos salian antes de que ninguna hubiera respondido.
+  if (!peticionDePlanes || Date.now() - planesPedidosEn >= VIGENCIA_PLANES) {
+    planesPedidosEn = Date.now();
+    peticionDePlanes = api.get(`${BASE}/subscription-plans`)
+      .then(({ data }) => (data ?? []).map(mapPlan))
+      .catch((fallo) => {
+        // Un fallo no se cachea: la siguiente llamada vuelve a intentarlo.
+        peticionDePlanes = null;
+        throw fallo;
+      });
+  }
+  return peticionDePlanes;
 }
 
 /**
@@ -83,12 +109,14 @@ export async function getMySubscription(userId) {
     await delay(300);
     return demoSubscription;
   }
+  // El catalogo solo sirve para poner nombre y precio al plan contratado, y
+  // pasa por getPlans para no volver a pedirlo si ya se pidio hace nada.
   const [subsRes, plansRes] = await Promise.allSettled([
     api.get(`${BASE}/subscriptions/users/${userId}`),
-    api.get(`${BASE}/subscription-plans`),
+    getPlans(),
   ]);
   const subs = subsRes.status === "fulfilled" ? subsRes.value.data ?? [] : [];
-  const plans = plansRes.status === "fulfilled" ? (plansRes.value.data ?? []).map(mapPlan) : [];
+  const plans = plansRes.status === "fulfilled" ? plansRes.value : [];
   if (subs.length === 0) return null;
 
   // Preferimos una activa; si no, la primera.
@@ -193,10 +221,18 @@ export async function processPayment(args) {
 }
 
 /**
- * Historial de facturas.
+ * Historial de comprobantes (US44).
  *
- * El modulo de pagos no expone "facturas por usuario", asi que se arma desde
- * los pagos registrados.
+ * El modulo de pagos no expone "facturas por usuario", asi que la lista se arma
+ * desde los pagos y cada uno se completa con su comprobante.
+ *
+ * Antes se quedaba en el pago y mostraba "Pago PEN" como descripcion: el numero
+ * de comprobante y su PDF nunca llegaban a la pantalla, que es justo lo que uno
+ * necesita para rendir el gasto. Ahora se pide el comprobante de cada pago.
+ *
+ * Un pago sin comprobante emitido no es un error: sigue en la lista sin numero,
+ * porque el pago existe aunque la factura aun no se haya emitido. Por eso cada
+ * consulta va por separado y un fallo suelto no tumba el historial.
  *
  * @returns {Promise<import("../types/billing").Invoice[]>}
  */
@@ -206,13 +242,31 @@ export async function getInvoices(userId) {
     return demoInvoices;
   }
   const { data } = await api.get(`${BASE}/payments/user/${userId}`);
-  return (data ?? []).map((p) => ({
-    id: p.payment_id,
-    date: (p.paid_at || p.created_at || "").slice(0, 10),
-    amount: p.amount ?? 0,
-    status: p.status === "paid" ? "PAID" : p.status === "failed" ? "FAILED" : "PENDING",
-    description: `Pago ${String(p.currency ?? "PEN").toUpperCase()}`,
-  }));
+  const pagos = data ?? [];
+  const comprobantes = await Promise.all(
+    pagos.map(async (p) => {
+      try {
+        const { data: inv } = await api.get(`${BASE}/invoices/payment/${p.payment_id}`);
+        return inv;
+      } catch {
+        return null;
+      }
+    })
+  );
+  return pagos.map((p, i) => {
+    const inv = comprobantes[i];
+    return {
+      id: inv?.invoice_id ?? p.payment_id,
+      number: inv?.invoice_number ?? null,
+      pdfUrl: inv?.pdf_url ?? null,
+      date: (inv?.issued_at || p.paid_at || p.created_at || "").slice(0, 10),
+      amount: inv?.total_amount ?? p.amount ?? 0,
+      status: p.status === "paid" ? "PAID" : p.status === "failed" ? "FAILED" : "PENDING",
+      description: inv?.invoice_number
+        ? `Comprobante ${inv.invoice_number}`
+        : `Pago ${String(p.currency ?? "PEN").toUpperCase()}`,
+    };
+  });
 }
 
 /**

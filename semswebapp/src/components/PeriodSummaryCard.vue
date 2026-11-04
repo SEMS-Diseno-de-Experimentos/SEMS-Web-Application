@@ -12,14 +12,22 @@ import { useLangStore } from "@/stores/lang";
 import { soles, kwh as fmtKwh } from "@/lib/format";
 
 // Resumenes de consumo por semana y por mes (RF-MON-06).
-const props = defineProps({ userId: { type: String, required: true } });
+//
+// Las lecturas se reciben ya cargadas de la pantalla: volver a pedirlas aqui
+// repetia el mismo GET que el resto de las tarjetas.
+const props = defineProps({
+  userId: { type: String, required: true },
+  readings: { type: Array, default: null },
+});
 
 const { t } = useLangStore();
 const view = ref("weekly");
 
 const { data, isLoading, isError } = useQuery({
   queryKey: computed(() => ["summary-period", props.userId]),
-  queryFn: () => getConsumptionSummary(props.userId),
+  queryFn: () => getConsumptionSummary(props.userId, 90,
+    props.readings ? { readings: props.readings } : {}),
+  enabled: computed(() => props.readings !== null),
 });
 
 const rows = computed(() =>

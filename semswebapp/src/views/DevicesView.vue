@@ -10,6 +10,7 @@ import UiErrorState from "@/components/ui/UiErrorState.vue";
 import DeviceCard from "@/components/DeviceCard.vue";
 import DeviceModal from "@/components/DeviceModal.vue";
 import { listDevices, createDevice, updateDevice, deleteDevice } from "@/services/devices.service";
+import { getMyOrganization, listSites, listZones } from "@/services/organizations.service";
 import { saveDeviceExtras } from "@/lib/deviceExtras";
 import { useAuthStore } from "@/stores/auth";
 import { useLangStore } from "@/stores/lang";
@@ -27,6 +28,28 @@ const editing = ref(null);
 const { data: devices, isLoading, isError } = useQuery({
   queryKey: computed(() => ["devices", user.value?.id]),
   queryFn: () => listDevices(user.value?.id),
+});
+
+// El alta de dispositivo necesita el local al que pertenece, asi que la lista
+// se carga aqui y se pasa al formulario. Las zonas solo del local elegido.
+const { data: org } = useQuery({
+  queryKey: computed(() => ["organization", user.value?.id]),
+  queryFn: () => getMyOrganization(user.value?.id),
+  enabled: computed(() => Boolean(user.value)),
+});
+
+const { data: sites } = useQuery({
+  queryKey: computed(() => ["sites", org.value?.organizationId]),
+  queryFn: () => listSites(org.value.organizationId),
+  enabled: computed(() => Boolean(org.value?.organizationId)),
+});
+
+const selectedSiteId = ref("");
+
+const { data: zones } = useQuery({
+  queryKey: computed(() => ["zones", selectedSiteId.value]),
+  queryFn: () => listZones(selectedSiteId.value),
+  enabled: computed(() => Boolean(selectedSiteId.value)),
 });
 
 const create = useMutation({
@@ -165,8 +188,11 @@ function onSubmit({ payload, extras }) {
       :user-id="user?.id ?? ''"
       :device="editing"
       :loading="saving"
+      :sites="sites ?? []"
+      :zones="zones ?? []"
       @close="closeModal"
       @submit="onSubmit"
+      @site-change="selectedSiteId = $event"
     />
   </div>
 </template>
