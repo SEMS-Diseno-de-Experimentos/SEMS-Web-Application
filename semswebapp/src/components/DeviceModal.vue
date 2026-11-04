@@ -24,10 +24,31 @@ const emit = defineEmits(["close", "submit", "site-change"]);
 
 const { t } = useLangStore();
 
+// Equipos del segmento comercial, en el orden en que se ofrecen. El primero
+// es el valor por defecto del formulario.
+//
+// Los medidores no estan en esta lista a proposito: aqui se registran los
+// equipos que consumen (frio, climatizacion, hornos), no el instrumento que
+// mide. Los medidores se vinculan en Monitoreo y en el detalle del local.
 const DEVICE_TYPES = [
-  "meter", "AIR_CONDITIONER", "REFRIGERATOR", "WATER_HEATER", "TV",
-  "WASHING_MACHINE", "MICROWAVE", "THERMOSTAT", "SENSOR", "smart_plug", "Mobile",
+  "COLD_ROOM", "FREEZER", "DISPLAY_FRIDGE", "COMPRESSOR", "HVAC",
+  "VENTILATION", "LIGHTING", "OVEN", "POS", "OTHER",
 ];
+
+// El <select> envia al backend la clave, pero muestra la etiqueta: una clave
+// como "DISPLAY_FRIDGE" no le dice nada a quien esta dando de alta el equipo.
+const DEVICE_TYPE_LABELS = {
+  COLD_ROOM: ["Cámara de frío", "Cold room"],
+  FREEZER: ["Congeladora", "Freezer"],
+  DISPLAY_FRIDGE: ["Exhibidor refrigerado", "Display fridge"],
+  COMPRESSOR: ["Compresor", "Compressor"],
+  HVAC: ["Climatización", "HVAC"],
+  VENTILATION: ["Extracción y ventilación", "Extraction and ventilation"],
+  LIGHTING: ["Iluminación", "Lighting"],
+  OVEN: ["Horno", "Oven"],
+  POS: ["Caja / POS", "Checkout / POS"],
+  OTHER: ["Otro", "Other"],
+};
 const PROTOCOLS = ["WIFI", "BLUETOOTH"];
 
 const isEdit = Boolean(props.device);
@@ -39,7 +60,7 @@ const initExtras = props.device
 
 const form = ref({
   deviceName: props.device?.deviceName ?? "",
-  deviceType: props.device?.deviceType ?? "meter",
+  deviceType: props.device?.deviceType ?? DEVICE_TYPES[0],
   brand: props.device?.brand ?? "",
   model: props.device?.model ?? "",
   connectionProtocol: props.device?.connectionProtocol ?? "WIFI",
@@ -71,6 +92,15 @@ function onSubmit() {
   });
 }
 
+// La etiqueta se resuelve al pintar y no al definir el mapa: `t` lee el idioma
+// de forma reactiva, y un objeto traducido una sola vez se quedaria con el
+// idioma que hubiera al abrir el formulario. Un tipo que no este en el mapa
+// (un equipo antiguo) cae a su clave en vez de quedarse en blanco.
+function deviceTypeLabel(opt) {
+  const etiqueta = DEVICE_TYPE_LABELS[opt];
+  return etiqueta ? t(etiqueta[0], etiqueta[1]) : opt;
+}
+
 function profileLabel(p) {
   return p.watts > 0 ? `${p.name} (${p.watts} W)` : p.name;
 }
@@ -89,7 +119,7 @@ function profileLabel(p) {
         <input
           v-model="form.deviceName"
           required
-          :placeholder="t('Ej: Medidor cocina', 'e.g. Kitchen meter')"
+          :placeholder="t('Ej: Cámara de frío 1', 'e.g. Cold room 1')"
           class="input-field"
         >
       </UiField>
@@ -158,7 +188,7 @@ function profileLabel(p) {
               :key="opt"
               :value="opt"
             >
-              {{ opt }}
+              {{ deviceTypeLabel(opt) }}
             </option>
           </select>
         </UiField>
@@ -183,7 +213,7 @@ function profileLabel(p) {
           <input
             v-model="form.brand"
             required
-            placeholder="Ej: Itron"
+            placeholder="Ej: Bohn"
             class="input-field"
           >
         </UiField>
@@ -191,7 +221,7 @@ function profileLabel(p) {
           <input
             v-model="form.model"
             required
-            placeholder="Ej: EM100"
+            placeholder="Ej: MGM-040"
             class="input-field"
           >
         </UiField>
@@ -201,7 +231,7 @@ function profileLabel(p) {
         <input
           v-model="form.externalDeviceCode"
           required
-          placeholder="Ej: MED-001"
+          placeholder="Ej: COLD-001"
           class="input-field"
         >
       </UiField>

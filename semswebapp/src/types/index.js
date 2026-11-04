@@ -95,7 +95,7 @@
  * @property {string} externalDeviceCode
  * @property {string} userId
  * @property {string} deviceName
- * @property {string} deviceType  p.ej. "meter", "AIR_CONDITIONER", "SENSOR"
+ * @property {string} deviceType  equipo comercial: p.ej. "COLD_ROOM", "HVAC", "OVEN"
  * @property {string} brand
  * @property {string} model
  * @property {string} connectionProtocol  "WIFI" | "BLUETOOTH"
