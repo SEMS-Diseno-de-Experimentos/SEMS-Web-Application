@@ -1,0 +1,30 @@
+# Puerta de integracion de la aplicacion web.
+#
+# Hasta ahora Vercel construia y publicaba sin que nadie hubiera corrido el
+# linter: un error de ESLint o una construccion rota solo se veian en
+# produccion. El repositorio ya tenia la herramienta configurada; lo que
+# faltaba era quien la ejecutara.
+name: Web CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: semswebapp/package-lock.json
+      - run: npm ci
+        working-directory: semswebapp
+      - run: npm run lint
+        working-directory: semswebapp
+      - run: npm run build
+        working-directory: semswebapp
