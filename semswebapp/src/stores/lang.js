@@ -11,8 +11,17 @@ const LANG_KEY = "sems-lang";
  * traducciones separado costaria mas de mantener de lo que ahorra.
  */
 export const useLangStore = defineStore("lang", () => {
+  // El idioma por defecto de la solucion es el ingles, como la landing y la
+  // API; el espanol es la alternativa. Quien ya eligio uno conserva su
+  // eleccion, que es lo que guarda localStorage.
   const saved = localStorage.getItem(LANG_KEY);
-  const lang = ref(saved === "en" || saved === "es" ? saved : "es");
+  const lang = ref(saved === "en" || saved === "es" ? saved : "en");
+
+  // El atributo lang del documento se ponia solo al cambiar de idioma, asi que
+  // hasta el primer cambio la pagina se anunciaba en el idioma escrito en
+  // index.html. Quien lee con lector de pantalla se lleva la pronunciacion del
+  // idioma equivocado.
+  document.documentElement.lang = lang.value;
 
   function setLang(l) {
     lang.value = l;
