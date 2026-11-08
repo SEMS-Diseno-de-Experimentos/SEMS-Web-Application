@@ -13,13 +13,16 @@ export const demoUser = {
 
 // Equipos de un establecimiento comercial, no de una vivienda: el segmento
 // del producto son locales de 200 a 2.000 m2 con cargo por potencia.
+// Cada equipo demo lleva su local y, salvo el ultimo, su zona: el dominio
+// exige el local y deja la zona opcional, y los filtros de la vista de
+// dispositivos se apoyan en ambos.
 export const demoDevices = [
-  { deviceId: "d-01", externalDeviceCode: "COLD-001", userId: "u-001", deviceName: "Cámara de frío 1", deviceType: "COLD_ROOM", brand: "Bohn", model: "MGM-040", connectionProtocol: "WIFI", status: "ACTIVE", registeredAt: "2026-06-01T10:00:00Z", updatedAt: "2026-06-01T10:00:00Z" },
-  { deviceId: "d-02", externalDeviceCode: "COLD-002", userId: "u-001", deviceName: "Cámara de frío 2", deviceType: "COLD_ROOM", brand: "Bohn", model: "MGM-040", connectionProtocol: "WIFI", status: "ACTIVE", registeredAt: "2026-06-01T10:05:00Z", updatedAt: "2026-06-01T10:05:00Z" },
-  { deviceId: "d-03", externalDeviceCode: "HVAC-003", userId: "u-001", deviceName: "Climatización — Sala de ventas", deviceType: "HVAC", brand: "Carrier", model: "38QUS", connectionProtocol: "WIFI", status: "ACTIVE", registeredAt: "2026-06-01T10:10:00Z", updatedAt: "2026-06-01T10:10:00Z" },
-  { deviceId: "d-04", externalDeviceCode: "DISP-004", userId: "u-001", deviceName: "Exhibidores refrigerados", deviceType: "DISPLAY_FRIDGE", brand: "Metalfrio", model: "VN-50", connectionProtocol: "WIFI", status: "ACTIVE", registeredAt: "2026-06-01T10:15:00Z", updatedAt: "2026-06-01T10:15:00Z" },
-  { deviceId: "d-05", externalDeviceCode: "LIGHT-005", userId: "u-001", deviceName: "Iluminación de sala", deviceType: "LIGHTING", brand: "Philips", model: "CoreLine", connectionProtocol: "BLUETOOTH", status: "ACTIVE", registeredAt: "2026-06-01T10:20:00Z", updatedAt: "2026-06-01T10:20:00Z" },
-  { deviceId: "d-06", externalDeviceCode: "OVEN-006", userId: "u-001", deviceName: "Horno de panadería", deviceType: "OVEN", brand: "Nova", model: "Max2000", connectionProtocol: "WIFI", status: "MAINTENANCE", registeredAt: "2026-06-01T10:25:00Z", updatedAt: "2026-06-01T10:25:00Z" },
+  { deviceId: "d-01", externalDeviceCode: "COLD-001", userId: "u-001", siteId: "site-demo-01", zoneId: "zone-demo-02", deviceName: "Cámara de frío 1", deviceType: "COLD_ROOM", brand: "Bohn", model: "MGM-040", connectionProtocol: "WIFI", status: "ACTIVE", registeredAt: "2026-06-01T10:00:00Z", updatedAt: "2026-06-01T10:00:00Z" },
+  { deviceId: "d-02", externalDeviceCode: "COLD-002", userId: "u-001", siteId: "site-demo-01", zoneId: "zone-demo-02", deviceName: "Cámara de frío 2", deviceType: "COLD_ROOM", brand: "Bohn", model: "MGM-040", connectionProtocol: "WIFI", status: "ACTIVE", registeredAt: "2026-06-01T10:05:00Z", updatedAt: "2026-06-01T10:05:00Z" },
+  { deviceId: "d-03", externalDeviceCode: "HVAC-003", userId: "u-001", siteId: "site-demo-01", zoneId: "zone-demo-01", deviceName: "Climatización — Sala de ventas", deviceType: "HVAC", brand: "Carrier", model: "38QUS", connectionProtocol: "WIFI", status: "ACTIVE", registeredAt: "2026-06-01T10:10:00Z", updatedAt: "2026-06-01T10:10:00Z" },
+  { deviceId: "d-04", externalDeviceCode: "DISP-004", userId: "u-001", siteId: "site-demo-01", zoneId: "zone-demo-01", deviceName: "Exhibidores refrigerados", deviceType: "DISPLAY_FRIDGE", brand: "Metalfrio", model: "VN-50", connectionProtocol: "WIFI", status: "ACTIVE", registeredAt: "2026-06-01T10:15:00Z", updatedAt: "2026-06-01T10:15:00Z" },
+  { deviceId: "d-05", externalDeviceCode: "LIGHT-005", userId: "u-001", siteId: "site-demo-01", zoneId: "zone-demo-01", deviceName: "Iluminación de sala", deviceType: "LIGHTING", brand: "Philips", model: "CoreLine", connectionProtocol: "BLUETOOTH", status: "ACTIVE", registeredAt: "2026-06-01T10:20:00Z", updatedAt: "2026-06-01T10:20:00Z" },
+  { deviceId: "d-06", externalDeviceCode: "OVEN-006", userId: "u-001", siteId: "site-demo-02", deviceName: "Horno de panadería", deviceType: "OVEN", brand: "Nova", model: "Max2000", connectionProtocol: "WIFI", status: "MAINTENANCE", registeredAt: "2026-06-01T10:25:00Z", updatedAt: "2026-06-01T10:25:00Z" },
 ];
 
 /**

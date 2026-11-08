@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed } from "vue";
+import { ref, computed, watch } from "vue";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/vue-query";
 import { storeToRefs } from "pinia";
 import { Plus } from "lucide-vue-next";
@@ -7,6 +7,7 @@ import UiCard from "@/components/ui/UiCard.vue";
 import UiButton from "@/components/ui/UiButton.vue";
 import UiLoading from "@/components/ui/UiLoading.vue";
 import UiErrorState from "@/components/ui/UiErrorState.vue";
+import UiSegmented from "@/components/ui/UiSegmented.vue";
 import DeviceCard from "@/components/DeviceCard.vue";
 import DeviceModal from "@/components/DeviceModal.vue";
 import { listDevices, createDevice, updateDevice, deleteDevice } from "@/services/devices.service";
@@ -51,6 +52,41 @@ const { data: zones } = useQuery({
   queryFn: () => listZones(selectedSiteId.value),
   enabled: computed(() => Boolean(selectedSiteId.value)),
 });
+
+// Filtros de la lista: local, zona y estado. Se filtra en el cliente porque la
+// lista completa ya viaja en una sola peticion; pedirla otra vez por cada
+// cambio de criterio costaria una vuelta al servidor sin traer nada nuevo.
+const filtroSite = ref("");
+const filtroZone = ref("");
+const filtroStatus = ref("ALL");
+
+const { data: zonasDelFiltro } = useQuery({
+  queryKey: computed(() => ["zones", filtroSite.value]),
+  queryFn: () => listZones(filtroSite.value),
+  enabled: computed(() => Boolean(filtroSite.value)),
+});
+
+// Una zona pertenece a un local: al cambiar de local, la zona elegida ya no
+// existe en el nuevo y el filtro quedaria vacio para siempre.
+watch(filtroSite, () => {
+  filtroZone.value = "";
+});
+
+const statusOptions = computed(() => [
+  ["ALL", t("Todos", "All")],
+  ["ACTIVE", t("Activos", "Active")],
+  ["INACTIVE", t("Inactivos", "Inactive")],
+  ["MAINTENANCE", t("Mantenimiento", "Maintenance")],
+]);
+
+const visibles = computed(() =>
+  (devices.value ?? []).filter(
+    (d) =>
+      (!filtroSite.value || d.siteId === filtroSite.value) &&
+      (!filtroZone.value || d.zoneId === filtroZone.value) &&
+      (filtroStatus.value === "ALL" || d.status === filtroStatus.value)
+  )
+);
 
 const create = useMutation({
   mutationFn: async ({ payload, extras }) => {
@@ -122,7 +158,7 @@ function onSubmit({ payload, extras }) {
           {{ t("Dispositivos", "Devices") }}
         </h2>
         <p class="text-sm text-slate-500 dark:text-slate-400">
-          {{ t("Gestiona los equipos vinculados a tu medidor.", "Manage the devices linked to your meter.") }}
+          {{ t("Gestiona los equipos de cada local y zona.", "Manage the devices of each site and zone.") }}
           <template v-if="hasLimit">
             · {{ count }}/{{ limit }} ({{ tierLabel }})
           </template>
@@ -168,19 +204,87 @@ function onSubmit({ payload, extras }) {
         )
       }}
     </UiCard>
-    <div
-      v-else
-      class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-    >
-      <DeviceCard
-        v-for="d in devices"
-        :key="d.deviceId"
-        :device="d"
-        :deleting="remove.isPending.value && remove.variables.value === d.deviceId"
-        @edit="editing = d"
-        @delete="remove.mutate(d.deviceId)"
-      />
-    </div>
+    <template v-else>
+      <div class="flex flex-wrap items-end gap-3">
+        <label class="flex flex-col gap-1">
+          <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">
+            {{ t("Local", "Site") }}
+          </span>
+          <select
+            v-model="filtroSite"
+            class="input-field"
+          >
+            <option value="">
+              {{ t("Todos", "All") }}
+            </option>
+            <option
+              v-for="s in sites ?? []"
+              :key="s.siteId"
+              :value="s.siteId"
+            >
+              {{ s.name }}
+            </option>
+          </select>
+        </label>
+
+        <label class="flex flex-col gap-1">
+          <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">
+            {{ t("Zona", "Zone") }}
+          </span>
+          <select
+            v-model="filtroZone"
+            class="input-field"
+            :disabled="!filtroSite || (zonasDelFiltro ?? []).length === 0"
+          >
+            <option value="">
+              {{ t("Todas", "All") }}
+            </option>
+            <option
+              v-for="z in zonasDelFiltro ?? []"
+              :key="z.zoneId"
+              :value="z.zoneId"
+            >
+              {{ z.name }}
+            </option>
+          </select>
+        </label>
+
+        <div class="flex flex-col gap-1">
+          <span class="text-xs font-semibold text-slate-500 dark:text-slate-400">
+            {{ t("Estado", "Status") }}
+          </span>
+          <UiSegmented
+            v-model="filtroStatus"
+            :options="statusOptions"
+          />
+        </div>
+      </div>
+
+      <UiCard
+        v-if="visibles.length === 0"
+        class="text-center text-sm text-slate-400"
+      >
+        {{
+          t(
+            "Ningún dispositivo coincide con el filtro.",
+            "No device matches the filter."
+          )
+        }}
+      </UiCard>
+      <div
+        v-else
+        class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+      >
+        <DeviceCard
+          v-for="d in visibles"
+          :key="d.deviceId"
+          :device="d"
+          :deleting="remove.isPending.value && remove.variables.value === d.deviceId"
+          @edit="editing = d"
+          @delete="remove.mutate(d.deviceId)"
+        />
+      </div>
+    </template>
 
     <DeviceModal
       v-if="modalOpen"
