@@ -34,6 +34,7 @@ const { t } = useLangStore();
 const STATUS_COLOR = { ACTIVE: "rose", ACKNOWLEDGED: "amber", RESOLVED: "green" };
 
 const tab = ref("ALL");
+const sev = ref("ALL");
 const thresholdOpen = ref(false);
 
 const enabled = computed(() => Boolean(user.value));
@@ -106,8 +107,26 @@ const typeLabel = computed(() => ({
   INACTIVITY: t("Inactividad", "Inactivity"),
 }));
 
+const sevOptions = computed(() => [
+  ["ALL", t("Toda severidad", "Any severity")],
+  ["HIGH", t("Alta", "High")],
+  ["MEDIUM", t("Media", "Medium")],
+  ["LOW", t("Baja", "Low")],
+]);
+
+// Orden de la bandeja: lo que nadie ha visto todavia va primero. Una alerta
+// resuelta ya no exige nada de quien la lee.
+const ORDEN_ESTADO = { ACTIVE: 0, ACKNOWLEDGED: 1, RESOLVED: 2 };
+
 const filtered = computed(() =>
-  (alerts.value ?? []).filter((a) => tab.value === "ALL" || a.status === tab.value)
+  (alerts.value ?? [])
+    .filter(
+      (a) =>
+        (tab.value === "ALL" || a.status === tab.value) &&
+        (sev.value === "ALL" || a.severity === sev.value)
+    )
+    .slice()
+    .sort((a, b) => (ORDEN_ESTADO[a.status] ?? 3) - (ORDEN_ESTADO[b.status] ?? 3))
 );
 
 // Los tres canales se muestran siempre, aunque el backend aun no tenga
@@ -153,10 +172,16 @@ function isResolving(id) {
         <UiCardTitle>
           {{ t("Bandeja de alertas", "Alerts inbox") }}
           <template #action>
-            <UiSegmented
-              v-model="tab"
-              :options="tabs"
-            />
+            <div class="flex flex-wrap items-center gap-2">
+              <UiSegmented
+                v-model="tab"
+                :options="tabs"
+              />
+              <UiSegmented
+                v-model="sev"
+                :options="sevOptions"
+              />
+            </div>
           </template>
         </UiCardTitle>
 
