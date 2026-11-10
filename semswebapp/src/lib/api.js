@@ -1,7 +1,11 @@
 import axios from "axios";
 
-// Flag de modo demo: por defecto activo salvo que se ponga "false".
-export const DEMO_MODE = import.meta.env.VITE_DEMO_MODE !== "false";
+// Flag de modo demo: hay que pedirlo. Antes venia activo salvo que alguien
+// escribiera "false", de modo que un despliegue al que se le olvidara la
+// variable servia datos inventados como si fueran del cliente. Apagado por
+// defecto, ese mismo olvido se ve: la pantalla falla contra el backend en vez
+// de mentir.
+export const DEMO_MODE = import.meta.env.VITE_DEMO_MODE === "true";
 
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";

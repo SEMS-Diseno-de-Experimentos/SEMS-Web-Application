@@ -94,6 +94,8 @@
  * @property {string} deviceId
  * @property {string} externalDeviceCode
  * @property {string} userId
+ * @property {string} siteId  local al que pertenece el equipo; obligatorio en la API
+ * @property {string} [zoneId]  zona dentro del local, si esta definida
  * @property {string} deviceName
  * @property {string} deviceType  equipo comercial: p.ej. "COLD_ROOM", "HVAC", "OVEN"
  * @property {string} brand
