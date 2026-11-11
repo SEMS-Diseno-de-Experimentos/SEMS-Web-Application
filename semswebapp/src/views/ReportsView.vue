@@ -2,7 +2,7 @@
 import { ref, computed } from "vue";
 import { useQuery } from "@tanstack/vue-query";
 import { storeToRefs } from "pinia";
-import { FileDown, FileText, LoaderCircle } from "lucide-vue-next";
+import { FileDown, FileSpreadsheet, FileText, LoaderCircle } from "lucide-vue-next";
 import UiCard from "@/components/ui/UiCard.vue";
 import UiCardTitle from "@/components/ui/UiCardTitle.vue";
 import UiButton from "@/components/ui/UiButton.vue";
@@ -20,6 +20,7 @@ import {
 import { listDevices } from "@/services/devices.service";
 import { getUnreadAlertCount } from "@/services/alerts.service";
 import { generateConsumptionReport } from "@/lib/report";
+import { buildConsumptionCsv, csvFileName, downloadCsv } from "@/lib/reportCsv";
 import { soles, kwh as fmtKwh } from "@/lib/format";
 import { useAuthStore } from "@/stores/auth";
 import { useLangStore } from "@/stores/lang";
@@ -93,20 +94,29 @@ const periods = [
   [30, "30d"],
 ];
 
+// PDF y CSV salen del mismo objeto: asi los dos archivos no pueden contar
+// cosas distintas sobre el mismo periodo.
+/** @returns {import("@/lib/report").ReportData} */
+const reportData = () => ({
+  userName: user.value?.fullName ?? user.value?.email ?? "—",
+  summary: summary.value ?? null,
+  consumption: consumption.value ?? [],
+  readings: readings.value ?? [],
+  days: days.value,
+  lang: lang.value,
+});
+
 function download() {
   generating.value = true;
   try {
-    generateConsumptionReport({
-      userName: user.value?.fullName ?? user.value?.email ?? "—",
-      summary: summary.value ?? null,
-      consumption: consumption.value ?? [],
-      readings: readings.value ?? [],
-      days: days.value,
-      lang: lang.value,
-    });
+    generateConsumptionReport(reportData());
   } finally {
     generating.value = false;
   }
+}
+
+function downloadAsCsv() {
+  downloadCsv(buildConsumptionCsv(reportData()), csvFileName(lang.value));
 }
 </script>
 
@@ -119,7 +129,7 @@ function download() {
       <p class="text-sm text-slate-500 dark:text-slate-400">
         {{
           allowed
-            ? t("Descarga el reporte de consumo de tu establecimiento en PDF.", `Download your establishment's consumption report as PDF.`)
+            ? t("Descarga el reporte de consumo de tu establecimiento en PDF o CSV.", `Download your establishment's consumption report as PDF or CSV.`)
             : t("Descarga reportes de consumo y gasto de tu establecimiento.", "Download consumption and cost reports for your establishment.")
         }}
       </p>
@@ -193,6 +203,14 @@ function download() {
               class="h-4 w-4"
             />
             {{ t("Descargar PDF", "Download PDF") }}
+          </UiButton>
+          <UiButton
+            variant="outline"
+            :disabled="generating"
+            @click="downloadAsCsv"
+          >
+            <FileSpreadsheet class="h-4 w-4" />
+            {{ t("Descargar CSV", "Download CSV") }}
           </UiButton>
           <span class="flex items-center gap-1.5 text-xs text-slate-400">
             <FileText class="h-3.5 w-3.5 shrink-0" />

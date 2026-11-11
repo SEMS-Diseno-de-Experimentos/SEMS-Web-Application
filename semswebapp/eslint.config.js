@@ -40,6 +40,8 @@ export default [
         Error: "readonly",
         isNaN: "readonly",
         console: "readonly",
+        Blob: "readonly",
+        URL: "readonly",
       },
     },
     rules: {
