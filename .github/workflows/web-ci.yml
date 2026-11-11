@@ -26,5 +26,7 @@ jobs:
         working-directory: semswebapp
       - run: npm run lint
         working-directory: semswebapp
+      - run: npm test
+        working-directory: semswebapp
       - run: npm run build
         working-directory: semswebapp
