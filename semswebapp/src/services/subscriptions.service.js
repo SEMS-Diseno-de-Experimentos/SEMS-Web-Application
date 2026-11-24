@@ -289,7 +289,10 @@ export async function createCheckoutSession(args) {
     subscription_id: args.subscriptionId,
     amount: args.amount,
     currency: "pen",
-    product_name: args.planName ? `SEMS ${args.planName}` : "SEMS",
+    // El backend lee `plan_name` y con el arma la linea de la pagina de pago.
+    // Enviandolo como `product_name` no llegaba, y Stripe mostraba siempre su
+    // valor por defecto, "Suscripcion SEMS", en vez del plan elegido.
+    plan_name: args.planName ? `SEMS ${args.planName}` : "SEMS",
     success_url: `${origin}/subscription?paid=1`,
     cancel_url: `${origin}/subscription?canceled=1`,
   });
