@@ -10,16 +10,14 @@ import { listDevices } from "./devices.service";
 // Modulo de analitica del backend.
 const BASE = "/api/v1/analytics";
 
-// El backend ha ido cambiando de nombre algunos campos entre versiones. Estos
-// dos ayudantes toman el primer valor utilizable de una lista de candidatos,
-// que es mas robusto que fijar un solo nombre y quedarse en cero cuando cambia.
-function num(...vals) {
-  for (const v of vals) if (typeof v === "number" && !isNaN(v)) return v;
-  return 0;
+// El modulo de analitica publica un contrato snake_case fijo, asi que cada
+// campo se lee por su nombre. Estos dos ayudantes solo sustituyen el valor
+// cuando falta o no es del tipo esperado, para que la vista no reciba undefined.
+function num(v) {
+  return typeof v === "number" && !isNaN(v) ? v : 0;
 }
-function str(...vals) {
-  for (const v of vals) if (typeof v === "string" && v) return v;
-  return "";
+function str(v) {
+  return typeof v === "string" ? v : "";
 }
 function normSeverity(s) {
   const u = String(s ?? "").toUpperCase();
@@ -34,15 +32,10 @@ export async function getRecommendations(userId) {
   }
   const { data } = await api.get(`${BASE}/recommendations/user/${userId}`);
   return (data ?? []).map((r) => ({
-    id: str(r.id, r.recommendation_id),
-    title: str(r.title, r.name, "Recomendación"),
-    detail: str(r.description, r.detail, r.message),
-    estimatedSaving: num(
-      r.estimated_savings_amount, r.estimated_saving_amount, r.potential_savings_amount,
-      r.potential_savings, r.savings_amount, r.monthly_savings, r.estimated_amount,
-      r.estimated_saving_soles, r.estimated_savings_soles, r.estimated_savings,
-      r.estimated_saving, r.savings_soles, r.savings
-    ),
+    id: str(r.id),
+    title: str(r.title) || "Recomendación",
+    detail: str(r.description),
+    estimatedSaving: num(r.estimated_saving_amount),
     // La API publica `status` ("pending" / "applied") y `applied_at`. Aqui se
     // leian `applied` e `is_applied`, que no existen en ninguna respuesta: la
     // recomendacion aplicada volvia a aparecer como pendiente al recargar.
@@ -99,14 +92,14 @@ export async function getAnomalies(userId, cargado = {}) {
   return (data ?? []).map((a) => {
     const id = str(a.device_id);
     const name = nameById.get(id) || (id ? `Dispositivo ${id.slice(0, 6)}` : "Dispositivo");
-    let description = str(a.description, a.message, a.detail);
+    let description = str(a.description);
     if (id) description = description.split(id).join(name);
     return {
-      id: str(a.id, a.anomaly_id),
+      id: str(a.id),
       deviceName: name,
       description,
       severity: normSeverity(a.severity),
-      detectedAt: str(a.detected_at, a.created_at),
+      detectedAt: str(a.detected_at),
       // Mismo caso que en las recomendaciones: la API manda `status`
       // ("open" / "resolved") y `resolved_at`, no un booleano.
       resolved: a.status === "resolved" || Boolean(a.resolved_at),
@@ -123,17 +116,15 @@ export async function getBillPrediction(userId) {
   const { data } = await api.get(`${BASE}/bill-predictions/user/${userId}`);
   const p = Array.isArray(data) ? data[0] : data;
   if (!p) return null;
-  let confidence = num(p.confidence, p.confidence_score);
-  if (confidence > 1) confidence = confidence / 100;
-  if (confidence === 0) {
-    const margin = num(p.error_margin_percentage, p.error_margin);
-    if (margin > 0) confidence = Math.max(0, 1 - margin / 100);
-  }
+  // La prediccion no trae una confianza: trae el margen de error del modelo.
+  // La confianza que ensena la pantalla es su complemento, porque un margen del
+  // 12 % es tanto como decir que el importe se acertara en un 88 %.
+  const margin = num(p.error_margin_percentage);
   return {
-    projectedCost: num(p.estimated_amount, p.projected_cost_soles, p.predicted_cost_soles, p.predicted_cost, p.projected_cost, p.estimated_cost),
-    projectedKwh: num(p.estimated_kwh, p.projected_kwh, p.predicted_kwh),
-    confidence,
-    closingDate: (str(p.period_end, p.closing_date, p.prediction_date) || "").slice(0, 10) || "fin de mes",
+    projectedCost: num(p.estimated_amount),
+    projectedKwh: num(p.estimated_kwh),
+    confidence: Math.min(1, Math.max(0, 1 - margin / 100)),
+    closingDate: str(p.period_end).slice(0, 10) || "fin de mes",
   };
 }
 
@@ -162,8 +153,8 @@ export async function getRankings(userId, cargado = {}) {
       return {
         rank: i + 1,
         deviceName: real || (name && name !== id ? name : `Dispositivo ${id.slice(0, 6)}`),
-        kwh: num(r.total_kwh, r.kwh, r.consumption_kwh),
-        cost: num(r.estimated_amount, r.cost_estimate_soles, r.cost_soles, r.cost),
+        kwh: num(r.total_kwh),
+        cost: num(r.estimated_amount),
       };
     });
 }
