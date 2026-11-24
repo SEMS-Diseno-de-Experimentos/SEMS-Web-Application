@@ -509,7 +509,10 @@ export async function unlinkMeter(meterId) {
     await delay(200);
     return;
   }
-  await api.delete(`${BASE}/energy-meters/${meterId}`);
+  // El backend no expone DELETE sobre el medidor: lo da de baja con
+  // PATCH .../deactivate, que es lo que conserva el historico de lecturas.
+  // Con DELETE respondia 405 y el boton no hacia nada.
+  await api.patch(`${BASE}/energy-meters/${meterId}/deactivate`);
 }
 
 // --- Resumenes por periodo (RF-MON-06): semana y mes ---
