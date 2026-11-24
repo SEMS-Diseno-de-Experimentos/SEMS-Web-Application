@@ -45,9 +45,27 @@ function mapUser(res) {
  *
  * @returns {import("../types").User | null}
  */
+/**
+ * Descodifica una parte de un JWT.
+ *
+ * El JWT va en base64url, que cambia "+" por "-" y "/" por "_" y se come el
+ * relleno. `atob` solo entiende el alfabeto clasico y lanza en cuanto aparece
+ * uno de esos dos caracteres, cosa muy frecuente en una carga de este tamano:
+ * el rescate de sesion fallaba casi siempre, justo cuando hacia falta. Y los
+ * bytes que devuelve son latin1, asi que un nombre con tilde habria salido
+ * roto; por eso se pasan por TextDecoder.
+ */
+function decodeBase64Url(valor) {
+  const base64 = valor.replace(/-/g, "+").replace(/_/g, "/");
+  const conRelleno = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+  const binario = atob(conRelleno);
+  const bytes = Uint8Array.from(binario, (c) => c.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
 function decodeToken(token) {
   try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
+    const payload = JSON.parse(decodeBase64Url(token.split(".")[1]));
     return {
       id: payload.userId ?? payload.sub ?? "",
       email: payload.email ?? payload.emailAddress ?? "",

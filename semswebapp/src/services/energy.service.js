@@ -40,6 +40,26 @@ export async function getReadings(userId, days = 14, cargado = {}) {
   return aggregateByDay(readings, days);
 }
 
+// Peru no aplica horario de verano: su hora local es siempre UTC-5.
+const DESFASE_PERU_MS = 5 * 60 * 60 * 1000;
+
+/**
+ * Dia calendario peruano (YYYY-MM-DD) del instante de una lectura.
+ *
+ * El backend devuelve el instante en UTC. Cortar los diez primeros caracteres
+ * de esa cadena da el dia en UTC, que no es el del local: una lectura de las
+ * 19:30 en Lima viaja como las 00:30 del dia siguiente. Ahi caia entera la
+ * franja de 19:00 a 23:59, que ademas es la hora punta, la mas cara.
+ *
+ * @param {string} iso instante en UTC
+ * @returns {string | null} null si la fecha no se puede leer
+ */
+function diaPeruano(iso) {
+  const t = new Date(iso).getTime();
+  if (isNaN(t)) return null;
+  return new Date(t - DESFASE_PERU_MS).toISOString().slice(0, 10);
+}
+
 /**
  * Agrupa lecturas crudas por dia dentro de la ventana pedida.
  *
@@ -55,7 +75,8 @@ export function aggregateByDay(readings, days = 14) {
   for (const r of readings) {
     const t = new Date(r.timestamp).getTime();
     if (isNaN(t) || t < cutoff) continue;
-    const day = r.timestamp.slice(0, 10);
+    const day = diaPeruano(r.timestamp);
+    if (!day) continue;
     const acc = byDay.get(day) ?? { kwh: 0, cost: 0 };
     acc.kwh += r.energy_kwh ?? 0;
     // El coste viene ya calculado con la tarifa del local y la franja en que
@@ -488,7 +509,10 @@ export async function unlinkMeter(meterId) {
     await delay(200);
     return;
   }
-  await api.delete(`${BASE}/energy-meters/${meterId}`);
+  // El backend no expone DELETE sobre el medidor: lo da de baja con
+  // PATCH .../deactivate, que es lo que conserva el historico de lecturas.
+  // Con DELETE respondia 405 y el boton no hacia nada.
+  await api.patch(`${BASE}/energy-meters/${meterId}/deactivate`);
 }
 
 // --- Resumenes por periodo (RF-MON-06): semana y mes ---
