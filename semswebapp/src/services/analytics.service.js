@@ -43,7 +43,10 @@ export async function getRecommendations(userId) {
       r.estimated_saving_soles, r.estimated_savings_soles, r.estimated_savings,
       r.estimated_saving, r.savings_soles, r.savings
     ),
-    applied: Boolean(r.applied ?? r.is_applied ?? false),
+    // La API publica `status` ("pending" / "applied") y `applied_at`. Aqui se
+    // leian `applied` e `is_applied`, que no existen en ninguna respuesta: la
+    // recomendacion aplicada volvia a aparecer como pendiente al recargar.
+    applied: r.status === "applied" || Boolean(r.applied_at),
   }));
 }
 
@@ -104,7 +107,9 @@ export async function getAnomalies(userId, cargado = {}) {
       description,
       severity: normSeverity(a.severity),
       detectedAt: str(a.detected_at, a.created_at),
-      resolved: Boolean(a.resolved ?? a.is_resolved ?? false),
+      // Mismo caso que en las recomendaciones: la API manda `status`
+      // ("open" / "resolved") y `resolved_at`, no un booleano.
+      resolved: a.status === "resolved" || Boolean(a.resolved_at),
     };
   });
 }
